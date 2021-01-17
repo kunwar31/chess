@@ -1,27 +1,25 @@
-class File:
-    def __init__(self, file):
-        """
-        A + 1 = B
-        """
-        self.file = file
+file_map = {
+            1: 'A',
+            2: 'B',
+            3: 'C',
+            4: 'D',
+            5: 'E',
+            6: 'F',
+            7: 'G',
+            8: 'H',
+            -1: '??'
+        }
 
-    def __add__(self, other):
-        return File(chr(ord(self.file)+other))
-
-    def __sub__(self, other):
-        return File(chr(ord(self.file)-other))
-
-    def __gt__(self, other):
-        return self.file > other.file
-
-    def __lt__(self, other):
-        return self.file < other.file
-
-    def __ge__(self, other):
-        return self.file >= other.file
-
-    def __le__(self, other):
-        return self.file <= other.file
+rev_file_map = {
+            'A': 1,
+            'B': 2,
+            'C': 3,
+            'D': 4,
+            'E': 5,
+            'F': 6,
+            'G': 7,
+            'H': 8,
+        }
 
 
 class Position:
@@ -30,23 +28,20 @@ class Position:
             raise ValueError
 
         self.rank = rank
-        if not isinstance(file, File):
-            self.file = File(file)
-        else:
-            self.file = file
+        self.file = rev_file_map.get(file, file)
 
     def __repr__(self):
-        return f"{self.file.file}{self.rank}"
+
+        return f"{file_map[self.file]}{self.rank}"
 
     def __hash__(self):
-        return f"{self.file.file}{self.rank}".__hash__()
+        return (self.rank * 8) + self.file
 
     def __gt__(self, other):
-        return f"{self.file.file}{self.rank}" > f"{other.file.file}{other.rank}"
+        return f"{self.file}{self.rank}" > f"{other.file.file}{other.rank}"
 
     def __lt__(self, other):
-        return f"{self.file.file}{self.rank}" < f"{other.file.file}{other.rank}"
+        return f"{self.file}{self.rank}" < f"{other.file.file}{other.rank}"
 
     def __eq__(self, other):
-        if isinstance(other, Position):
-            return f"{self.file.file}{self.rank}" == f"{other.file.file}{other.rank}"
+        return self.file == other.file and self.rank == other.rank
