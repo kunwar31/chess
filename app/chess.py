@@ -1,5 +1,6 @@
 from .board import Board
 from functools import lru_cache
+import time
 import numpy as np
 from multiprocessing.pool import Pool
 
@@ -16,7 +17,11 @@ def get_score(board, player):
     score = 0
     for position, piece in board.board.items():
         if piece.color == player:
-            score += piece.score
+            piece_score = piece.score
+            if piece.name not in ['K', 'P']:
+                piece_score *= len(piece.get_legal_moves(board))
+                piece_score = min(piece_score, 10)
+            score += min(piece_score, 10)
     return score
 
 
@@ -25,15 +30,28 @@ def get_score_difference(board, player):
     opponent_score = 0
     for position, piece in board.board.items():
         if piece.color == player:
-            score += piece.score
+            piece_score = piece.score
+            if piece.name not in ['K', 'P']:
+                piece_score *= len(piece.get_legal_moves(board))
+                piece_score = min(piece_score, 10)
+            score += piece_score
         else:
-            opponent_score += piece.score
+            piece_score = piece.score
+            if piece.name not in ['K', 'P']:
+                piece_score *= len(piece.get_legal_moves(board))
+                piece_score = min(piece_score, 10)
+            opponent_score += piece_score
     return score - opponent_score
 
 
 def alphabeta_minimax(args):
-    piece, move_position, board, player, current_player, depth, max_depth, alpha, beta = args
-    if depth > max_depth:
+    piece, move_position, board, player, current_player, start_time, max_time, depth, max_depth, min_depth,\
+    alpha, beta = args
+
+    if start_time == 0:
+        start_time = time.time()
+
+    if (time.time() - start_time >= max_time and depth >= min_depth) or depth >= max_depth:
         return get_score_difference(board, player)
 
     board_copy = board.copy()
@@ -50,7 +68,8 @@ def alphabeta_minimax(args):
         for new_piece, legal_moves in legal_moves:
             for move in legal_moves:
                 value = max(value, alphabeta_minimax((new_piece, move, board_copy, player,
-                                                      current_player, depth + 1, max_depth, alpha, beta)))
+                                                      current_player, start_time, max_time, depth+1, max_depth, min_depth,
+                                                      alpha, beta)))
                 alpha = max(alpha, value)
                 if alpha >= beta:
                     break
@@ -65,7 +84,8 @@ def alphabeta_minimax(args):
         for new_piece, legal_moves in legal_moves:
             for move in legal_moves:
                 value = min(value, alphabeta_minimax((new_piece, move, board_copy, player,
-                                                      current_player, depth + 1, max_depth, alpha, beta)))
+                                                      current_player, start_time, max_time, depth+1, max_depth, min_depth,
+                                                      alpha, beta)))
                 beta = max(beta, value)
                 if beta <= alpha:
                     break
@@ -76,7 +96,7 @@ def alphabeta_minimax(args):
 
 def minimax(args):
     piece, move_position, board, player, current_player, depth, max_depth = args
-    if depth > max_depth:
+    if depth >= max_depth:
         return get_score_difference(board, player)
 
     board_copy = board.copy()
@@ -107,7 +127,7 @@ def minimax(args):
 
 def _get_score(args):
     piece, move_position, board, player, current_player, depth, max_depth = args
-    if depth > max_depth:
+    if depth >= max_depth:
         return get_score_difference(board, player)
 
     piece_copy = piece.copy()
@@ -140,26 +160,26 @@ class ChessGame:
         self.player_2 = player_2
         self.max_depth = 10
         self.cache = {}
+        self.pool = Pool(12)
 
-    def get_best_move(self, board, player, depth):
-        self.max_depth = depth
+    def get_best_move(self, board, player, max_time, max_depth, min_depth):
         board_copy = board.copy()
 
         all_args = []
 
         for piece, legal_moves in get_all_legal_moves(board_copy, player):
             for move in legal_moves:
-                all_args.append((piece, move, board_copy, player, player, 0, depth, -1000000000, 1000000000))
+                all_args.append((piece, move, board_copy, player, player, 0, max_time, 0, max_depth, min_depth,
+                                 -1000000000,
+                                 1000000000))
 
         counter = 0
 
         all_node_scores = {}
 
-        pool = Pool(12)
-        for new_score in pool.imap(alphabeta_minimax, all_args):
+        for new_score in self.pool.imap(alphabeta_minimax, all_args):
             all_node_scores[(all_args[counter][0], all_args[counter][1])] = new_score
             counter += 1
-        pool.close()
 
         best_score = max(all_node_scores.values())
         best_nodes = [node for node, score in all_node_scores.items() if score == best_score]
@@ -168,13 +188,13 @@ class ChessGame:
         print(best_node, best_score)
         return best_node, best_score
 
-    def play(self, board, depth=1):
+    def play(self, board, max_time=5, max_depth=50, min_depth=3):
         current_player = 'W'
         board.view_board()
         print()
 
         while True:
-            (piece, move_position), _ = self.get_best_move(board, current_player, depth)
+            (piece, move_position), _ = self.get_best_move(board, current_player, max_time, max_depth, min_depth)
             if piece is None:
                 break
             board.move_piece(piece.position, move_position)

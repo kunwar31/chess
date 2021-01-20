@@ -1,4 +1,5 @@
 from .position import Position
+from functools import lru_cache
 
 
 def _get_fwd_rank(position, n_step):
@@ -42,8 +43,6 @@ def _get_straight_moves(position, n_steps, color, board, is_pawn=False, is_not_k
 
 
 def _get_diagonal_moves(position, n_steps, color, board, is_forward=True, is_right=True, is_for_attack=False):
-    # TODO - fix piece blocks diagonal
-
     moves = set()
     color_sign = -1 if color == 'B' else 1
 

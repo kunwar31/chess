@@ -22,6 +22,10 @@ class Board:
     def __init__(self, snapshots=True, fill=True):
         self.board = {}
         self.board_states = {}
+        self.attacked_positions = {
+            'W': {},
+            'B': {}
+        }
         self.latest_datetime = datetime.now()
         self.snapshots = snapshots
 
@@ -36,6 +40,8 @@ class Board:
         }
         if fill:
             self._fill_board()
+            self.update_attacked_positions('W')
+            self.update_attacked_positions('B')
 
     def copy(self, snapshots=False):
         new_board = Board(snapshots=snapshots, fill=False)
@@ -45,6 +51,10 @@ class Board:
             new_board.board[new_piece.position] = new_piece
         new_board.king = self.king.copy()
         new_board.king_in_check = self.king_in_check.copy()
+        for piece, attacks in self.attacked_positions['W'].items():
+            new_board.attacked_positions['W'][piece.copy()] = attacks.copy()
+        for piece, attacks in self.attacked_positions['B'].items():
+            new_board.attacked_positions['B'][piece.copy()] = attacks.copy()
         return new_board
 
     def __hash__(self):
@@ -133,18 +143,38 @@ class Board:
     def get_piece(self, position):
         return self[position]
 
+    @staticmethod
+    def _invert_color(color):
+        if color == 'W':
+            return 'B'
+        return 'W'
+
     def move_piece(self, from_position, to_position):
         piece = self.get_piece(from_position)
+        piece_taken = self.get_piece(to_position)
+        if piece_taken is not None:
+            del self.attacked_positions[self._invert_color(piece_taken.color)][piece_taken]
+
         piece.move(to_position)
         del self.board[from_position]
         self.board[to_position] = piece
+
+        inverted_color = self._invert_color(piece.color)
+        self.attacked_positions[inverted_color][piece] = piece.get_attacked_positions(self)
+
+        self.king_in_check[piece.color] = self.king[piece.color].is_in_check(
+            self
+        )
+
+        self.king_in_check[inverted_color] = self.king[inverted_color].is_in_check(
+            self
+        )
         self._board_snapshot()
 
-    def get_attacked_positions(self, color):
-        attacked_positions = {}
-
+    def update_attacked_positions(self, color):
         for piece in self.board.values():
             if piece.color != color:
-                attacked_positions[piece] = piece.get_attacked_positions(self)
+                self.attacked_positions[color][piece] = piece.get_attacked_positions(self)
 
-        return attacked_positions
+    def get_attacked_positions(self, color):
+        return self.attacked_positions[color]

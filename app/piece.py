@@ -1,7 +1,23 @@
 from .position import Position
+from functools import lru_cache
 from .moves import get_left_moves, get_right_moves, get_forward_moves, get_backward_moves,\
     get_backward_left_diagonal_moves, get_backward_right_diagonal_moves, get_forward_left_diagonal_moves, \
     get_forward_right_diagonal_moves
+
+name_hash = {
+    'E': 1,
+    'B': 2,
+    'K': 3,
+    'P': 4,
+    'N': 5,
+    'R': 6,
+    'Q': 7
+}
+
+color_hash = {
+    'W': 1,
+    'B': -1
+}
 
 
 class Piece:
@@ -17,7 +33,7 @@ class Piece:
         self.icon = icon
 
     def __hash__(self):
-        return f"{self.position.__hash__()}{self.name}{self.color}".__hash__()
+        return (self.position.__hash__() + (100 * name_hash[self.name])) * color_hash[self.color]
 
     def __eq__(self, other):
         return self.__hash__() == other.__hash__()
@@ -35,6 +51,7 @@ class Piece:
         # TODO - config based moves
         raise NotImplementedError
 
+    @lru_cache(maxsize=100)
     def get_legal_moves(self, board):
         # TODO - King castles
         # TODO - Pawn - en passant
@@ -43,41 +60,46 @@ class Piece:
         legal_moves = set()
 
         moves = self.get_moves(board) - {self.position}
-        king_pos = board.king[self.color].position
-        attacked_positions = board.get_attacked_positions(self.color)
-        king_in_check = board.king[self.color].is_in_check(board)
+        # king_pos = board.king[self.color].position
+        # attacked_positions = board.get_attacked_positions(self.color)
+        # king_in_check = board.king[self.color].is_in_check(board)
 
-        # check for pins
-        for piece, attacked_path in attacked_positions.items():
-            if self.position in attacked_path:
-                if not king_in_check:
-                    board_copy = board.copy()
-                    del board_copy.board[self.position]
-                    if board_copy.king[self.color].is_in_check(board_copy):
-                        return set()
+        # check for pins/check if king in check and if we can block/take
+
+        for move in moves:
+            board_copy = board.copy()
+            board_copy.move_piece(self.position, move)
+            if not board_copy.king_in_check[self.color]:
+                legal_moves.add(move)
+
+        # for piece, attacked_path in attacked_positions.items():
+        #     if self.position in attacked_path:
+        #         if not king_in_check:
+        #             board_copy = board.copy()
+        #             del board_copy.board[self.position]
+        #             if board_copy.king[self.color].is_in_check(board_copy):
+        #                 return set()
 
         # check if king in check and if we can block/take
-        if king_in_check:
-            for piece, attacked_path in attacked_positions.items():
-                if king_pos in attacked_path:
-                    # Check if can block
-                    possible_blocks = moves.intersection(attacked_path)
-                    blocks = set()
-                    for block in possible_blocks:
-                        board_copy = board.copy()
-                        board_copy.move_piece(self.position, block)
-                        if not board_copy.king[self.color].is_in_check(board_copy):
-                            blocks.add(block)
-
-                    if len(blocks) > 0:
-                        legal_moves.update(blocks)
-
-                    # Check if can take
-                    legal_moves.update(moves.intersection({piece.position}))
-
-            return legal_moves
-
-        legal_moves.update(moves)
+        # if king_in_check:
+        #     for piece, attacked_path in attacked_positions.items():
+        #         if king_pos in attacked_path:
+        #             # Check if can block
+        #             possible_blocks = moves.intersection(attacked_path)
+        #             blocks = set()
+        #             for block in possible_blocks:
+        #                 board_copy = board.copy()
+        #                 board_copy.move_piece(self.position, block)
+        #                 if not board_copy.king[self.color].is_in_check(board_copy):
+        #                     blocks.add(block)
+        #
+        #             if len(blocks) > 0:
+        #                 legal_moves.update(blocks)
+        #
+        #             # Check if can take
+        #             legal_moves.update(moves.intersection({piece.position}))
+        #
+        #     return legal_moves
 
         return legal_moves
 
@@ -223,44 +245,6 @@ class King(Piece):
         super(King, self).__init__(position=position, color=color, name='K', icon=icon, score=100)
 
     def get_moves(self, board):
-        possible_moves = set()
-        moves = set()
-
-        possible_moves.update(get_forward_moves(self.position, 1, self.color, board))
-        possible_moves.update(get_backward_moves(self.position, 1, self.color, board))
-        possible_moves.update(get_left_moves(self.position, 1, self.color, board))
-        possible_moves.update(get_right_moves(self.position, 1, self.color, board))
-        possible_moves.update(get_forward_right_diagonal_moves(self.position, 1, self.color, board))
-        possible_moves.update(get_forward_left_diagonal_moves(self.position, 1, self.color, board))
-        possible_moves.update(get_backward_right_diagonal_moves(self.position, 1, self.color, board))
-        possible_moves.update(get_backward_left_diagonal_moves(self.position, 1, self.color, board))
-
-        # King cannot move into a check
-        # TODO - fix King moves into checks sometimes
-
-        for move in possible_moves:
-            board_copy = board.copy()
-            board_copy.move_piece(self.position, move)
-            if not board_copy.get_piece(move).is_in_check(board_copy):
-                moves.add(move)
-
-        return moves
-
-    def get_legal_moves(self, board):
-        return self.get_moves(board)
-
-    def is_in_check(self, board):
-        attacked_positions = board.get_attacked_positions(self.color)
-
-        for piece, attacked_path in attacked_positions.items():
-            if self.position in attacked_path:
-                board.king_in_check[self.color] = True
-                return True
-
-        board.king_in_check[self.color] = False
-        return False
-
-    def get_attacked_positions(self, board):
         moves = set()
 
         moves.update(get_forward_moves(self.position, 1, self.color, board))
@@ -273,6 +257,15 @@ class King(Piece):
         moves.update(get_backward_left_diagonal_moves(self.position, 1, self.color, board))
 
         return moves
+
+    def is_in_check(self, board):
+        attacked_positions = board.get_attacked_positions(self.color)
+
+        for piece, attacked_path in attacked_positions.items():
+            if self.position in attacked_path:
+                return True
+
+        return False
 
 
 class Pieces:
