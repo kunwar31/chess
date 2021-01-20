@@ -18,10 +18,7 @@ def get_score(board, player):
     for position, piece in board.board.items():
         if piece.color == player:
             piece_score = piece.score
-            if piece.name not in ['K', 'P']:
-                piece_score *= len(piece.get_legal_moves(board))
-                piece_score = min(piece_score, 10)
-            score += min(piece_score, 10)
+            score += piece_score
     return score
 
 
@@ -31,15 +28,9 @@ def get_score_difference(board, player):
     for position, piece in board.board.items():
         if piece.color == player:
             piece_score = piece.score
-            if piece.name not in ['K', 'P']:
-                piece_score *= len(piece.get_legal_moves(board))
-                piece_score = min(piece_score, 10)
             score += piece_score
         else:
             piece_score = piece.score
-            if piece.name not in ['K', 'P']:
-                piece_score *= len(piece.get_legal_moves(board))
-                piece_score = min(piece_score, 10)
             opponent_score += piece_score
     return score - opponent_score
 
@@ -86,7 +77,7 @@ def alphabeta_minimax(args):
                 value = min(value, alphabeta_minimax((new_piece, move, board_copy, player,
                                                       current_player, start_time, max_time, depth+1, max_depth, min_depth,
                                                       alpha, beta)))
-                beta = max(beta, value)
+                beta = min(beta, value)
                 if beta <= alpha:
                     break
             if beta <= alpha:
@@ -160,7 +151,7 @@ class ChessGame:
         self.player_2 = player_2
         self.max_depth = 10
         self.cache = {}
-        self.pool = Pool(12)
+        self.pool = Pool(100)
 
     def get_best_move(self, board, player, max_time, max_depth, min_depth):
         board_copy = board.copy()
